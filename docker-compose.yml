@@ -1,0 +1,71 @@
+services:
+  # 1. PHP/LARAVEL (app)
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: minicrocera-app
+    restart: always
+    working_dir: /var/www/html
+    user: "501"  # UID locale su Mac (verifica con `id -u`)
+    volumes:
+      - .:/var/www/html:cached  # Usa :cached per migliorare performance su Mac
+      # ATTENZIONE: questa riga può causare problemi se la cartella vendor non esiste sul host
+      # Se hai problemi con composer install, commentala:
+      # - /var/www/html/vendor
+    networks:
+      - minicrocera_network
+    depends_on:
+      - db
+      - redis
+
+  # 2. NGINX (web server)
+  nginx:
+    image: nginx:1.21-alpine
+    container_name: minicrocera-nginx
+    restart: always
+    ports:
+      - "8000:80"
+    volumes:
+      - ./docker/nginx/conf.d:/etc/nginx/conf.d
+      - .:/var/www/html:cached
+    networks:
+      - minicrocera_network
+    depends_on:
+      - app
+
+  # 3. MARIADB/MYSQL (database)
+  db:
+    image: mariadb:10
+    container_name: minicrocera-db
+    restart: always
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: minicrocera
+      MYSQL_USER: root
+      MYSQL_PASSWORD: root
+      XDG_CONFIG_HOME: /var/www/.config
+    volumes:
+      - db_data:/var/lib/mysql
+    networks:
+      - minicrocera_network
+
+
+  # 4. REDIS (caching)
+  redis:
+    image: redis:alpine
+    container_name: minicrocera-redis
+    restart: always
+    ports:
+      - "6379:6379"
+    networks:
+      - minicrocera_network
+
+volumes:
+  db_data:
+
+networks:
+  minicrocera_network:
+    driver: bridge
